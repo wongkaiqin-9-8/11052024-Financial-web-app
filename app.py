@@ -2,6 +2,10 @@ from flask import Flask, render_template, request
 import google.generativeai as palm
 import replicate
 import os
+import sqlite3
+import datetime
+from flask import Markup
+
 
 flag = 1
 name = ""
@@ -10,6 +14,7 @@ makersuite_api = os.getenv("MAKERSUITE_API_TOKEN")
 palm.configure(api_key=makersuite_api)
 
 model = {'model' :"models/chat-bison-001"}
+
 app = Flask(__name__) #to register the web as yours
 
 @app.route("/",methods=["GET","POST"]) #get from frontend, post to frontend
@@ -21,6 +26,13 @@ def main():
     global flag, name
     if flag == 1: #to ensure that only have to type in the name once
         name = request.form.get("q") #backend
+        current_time = datetime.datetime.now()
+        conn = sqlite3.connect('log.db')
+        c= conn.cursor()
+        c.execute("insert into user (name,time) values (?,?)", (name,current_time)) #update/insert
+        conn.commit()
+        c.close()
+        conn.close()        
         flag = 0
     return(render_template("main.html",r=name)) #r frontend to receive from backend
 
@@ -43,8 +55,6 @@ def text_result_makersuite():
     r = palm.chat(**model, messages=q)
     return(render_template("text_result_makersuite.html", r=r.last))
 
-
-
 @app.route("/generate_image",methods=["GET","POST"]) #get from backend, post to frontend
 def generate_image():
     return(render_template("generate_image.html"))
@@ -56,6 +66,30 @@ def image_result():
       input = {"prompt": q}
     )
     return(render_template("image_result.html", r=r[0]))
+
+@app.route("/log",methods=["GET","POST"]) #get from backend, post to frontend
+def log():
+    conn = sqlite3.connect('log.db')
+    c= conn.cursor()
+    c.execute("select * from user")
+    r = ""
+    for row in c:
+      r += str(row) + "<br>"
+    print(r)
+    r = Markup(r)
+    c.close()
+    conn.close()
+    return(render_template("log.html", r = r))
+
+@app.route("/delete",methods=["GET","POST"]) #get from backend, post to frontend
+def delete():
+    conn = sqlite3.connect('log.db')
+    c= conn.cursor()
+    c.execute("delete from user") #delete
+    conn.commit()
+    c.close()
+    conn.close()
+    return(render_template("delete.html"))
 
 
 @app.route("/end",methods=["GET","POST"]) #get from backend, post to frontend
